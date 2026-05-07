@@ -912,7 +912,7 @@ const StepNBC = ({ region }) => {
         </div>
 
         <div style={{ padding: "0 18px 12px", overflowX: "auto" }}>
-          <div style={{ display: "flex", gap: 10, minWidth: 800, paddingBottom: 2 }}>
+          <div style={{ display: "flex", gap: 10, width: "max-content", paddingBottom: 2 }}>
             {hcps.map((hcp) => (
               <div key={hcp.name} style={{ width: 180, border: `1px solid ${T.borderLight}`, borderRadius: 14, background: "#fff", padding: 10, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
@@ -1424,9 +1424,18 @@ export default function EDetailingPrototype() {
     <div style={{
       minHeight: "100vh",
       backgroundImage: "radial-gradient(ellipse at top, #2a2a2a 0%, #0a0a0a 100%)",
-      color: T.text, padding: 16,
       fontFamily: '"Salesforce Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-      fontSize: 13, display: "grid", gridTemplateColumns: "240px 1fr 300px", gap: 16,
+      fontSize: 13,
+      overflowX: "hidden",
+    }}>
+    <div style={{
+      maxWidth: "100vw",
+      padding: 16,
+      color: T.text,
+      display: "grid",
+      gridTemplateColumns: "220px minmax(0, 1fr) 280px",
+      gap: 16,
+      boxSizing: "border-box",
     }}>
       {/* LEFT: Process steps with surface labels */}
       <aside style={{ background: "#fff", borderRadius: 12, alignSelf: "start", position: "sticky", top: 16, overflow: "hidden" }}>
@@ -1762,6 +1771,7 @@ export default function EDetailingPrototype() {
           </div>
         </div>
       </aside>
+    </div>
     </div>
   );
 }
