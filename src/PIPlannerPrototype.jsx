@@ -5,8 +5,10 @@ import {
   Eye, BarChart3, CheckCircle2, AlertTriangle, Globe, ShieldCheck, Mail,
   Languages, X, Info, ArrowRight, Play, Plus, MoreVertical, Wifi, BatteryFull,
   Home, Calendar, Users, Grid3x3, Star, Inbox, Briefcase, FolderOpen,
+  Download,
   Layers, ListChecks, Activity, ChevronDown, Phone, Video
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 
 /* iPad / LSC tokens calibrated to training-deck screenshots */
 const T = {
@@ -59,6 +61,60 @@ const STEPS = [
     summary: "Approved templates with Fragments and locked sections — launched from the HCP record." },
 ];
 
+const COMMERCIAL_PRECALL_STEPS = [
+  { id: 201, phase: "Before Visit", title: "Next Best Customers",
+    icon: Users, surface: "Connext · NBC Dashboard",
+    surfaceNote: "Home page · AI-ranked HCP card list with channel preference and consent status",
+    summary: "AI-ranked HCP targeting with channel preference, consent status per channel, territory metrics, and segmentation tools." },
+  { id: 202, phase: "Before Visit", title: "Calendar & Planner",
+    icon: Calendar, surface: "Connext · Calendar View",
+    surfaceNote: "Calendar page · Day/Week/Quarter views with Outlook sync and AI follow-up reminders",
+    summary: "Unified visit calendar with Outlook sync, AI-scheduled follow-ups, optimal contact windows, and manager visibility." },
+  { id: 203, phase: "After Visit",  title: "Visit Submission",
+    icon: ListChecks, surface: "Connext · Visit Submission Queue",
+    surfaceNote: "Visit record · Documentation queue with AI-flagged pending submissions",
+    summary: "Pending visit documentation queue with AI-prioritised incomplete records and compliance deadline alerts." },
+];
+
+/* Commercial Pre-Call Variations — APAC-specific, sourced directly from call planning data.xlsx */
+const CP_VARIATIONS = {
+  201: { // Next Best Customers
+    APAC: {
+      tag: "Channel-Aware NBC + Consent & PV Gating",
+      surface: "Connext · NBC Dashboard",
+      story: "APAC NBC dashboard shows channel preference chips (F2F/Email/Phone/Virtual), consent status per channel, and PV-mandated visit flags on each HCP card.",
+      effect: "Channel chips greyed when consent absent. AI rank includes geographic cluster, visit-day capacity, and pharmacovigilance requirements.",
+      stories: [
+        { id: "STORY-00001", type: "Config",              core: "Yes", text: "View each HCP's preferred engagement channel (F2F, email, phone, virtual) on the NBC list." },
+        { id: "STORY-00004", type: "Config",              core: "Yes", text: "HCP card shows channel preference and recent channel-level engagement at a glance." },
+        { id: "STORY-00010", type: "Config",              core: "Yes", text: "View consent status per channel for each HCP so I never reach out through an unconsented channel." },
+        { id: "STORY-00013", type: "Custom AI",           core: "Yes", text: "AI generates a ranked HCP visit list accounting for priority tier, geographic proximity, and facility co-location." },
+        { id: "STORY-00015", type: "Custom AI",           core: "Yes", text: "View best day and time to contact each HCP per channel based on historical engagement patterns." },
+        { id: "STORY-00025", type: "Config",              core: "Yes", text: "See specific access conditions for each HCP's visitability status (RxVantage booking, no-rep days, institutional policies)." },
+        { id: "STORY-00028", type: "Custom AI",           core: "Yes", text: "AI recommends the most appropriate compliant alternative channel for HCPs who are inaccessible in person." },
+        { id: "STORY-00029", type: "Integration",         core: "No",  text: "Be aware of when a patient will next visit the HCP so I can plan to visit before that appointment." },
+        { id: "STORY-00030", type: "Config",              core: "No",  text: "Pharmacovigilance-mandated visits are included in the proposed schedule so compliance visits are never missed." },
+        { id: "STORY-00031", type: "Config",              core: "No",  text: "Track and capture Service Calls (sample drops, leave-behinds) where no direct HCP interaction occurs." },
+      ],
+    },
+  },
+  202: { // Calendar & Planner
+    APAC: {
+      tag: "RxVantage Integration + Adaptive Geographic Scheduling",
+      surface: "Connext · Calendar View",
+      story: "APAC calendar layers RxVantage physician availability over Connext visits, groups suggestions by geographic cluster, and learns optimal contact windows per HCP.",
+      effect: "Physician schedule overlay shown in calendar cells. AI scheduling respects APAC cluster grouping and per-period day-capacity constraints.",
+      stories: [
+        { id: "STORY-00039", type: "Integration",         core: "No",  text: "Integration with RxVantage to layer physician schedules on the Connext calendar without switching to an external system." },
+        { id: "STORY-00016", type: "Custom AI",           core: "Yes", text: "System learns and suggests optimal contact windows per HCP per channel based on historical engagement patterns." },
+        { id: "STORY-00023", type: "Config",              core: "No",  text: "Recommendations respect the number of visit days available in a given period, aligned with actual rep capacity." },
+        { id: "STORY-00024", type: "Custom Optimization", core: "No",  text: "Recommendations group HCPs by geographic cluster to reflect realistic travel patterns rather than point-to-point routes." },
+        { id: "STORY-00041", type: "Config",              core: "Yes", text: "Clone a past visit record to pre-populate a new visit with the same HCP, location, and objectives." },
+      ],
+    },
+  },
+};
+
 /* VARIATIONS — same logic, surfaces re-aligned */
 const VARIATIONS = {
   3: {
@@ -101,6 +157,31 @@ const VARIATIONS = {
       story: "Reps assemble follow-up assets from approved building blocks.",
       effect: "Block library replaces freeform editor; out-of-bounds drag rejected." },
   },
+};
+
+const EXPERIENCE_CONFIG = {
+  detailing: {
+    label: "e-Detailing",
+    title: "e-Detailing on iPad",
+    subtitle: "Each step rendered in its native LSC surface",
+    defaultStepId: 2,
+    steps: STEPS,
+    variations: VARIATIONS,
+  },
+  commercialPreCall: {
+    label: "Commercial Pre-Call",
+    title: "Commercial Pre-Call Planning",
+    subtitle: "Next Best Customers · Calendar & Planner · Visit Submission — sourced from call planning data",
+    defaultStepId: 201,
+    steps: COMMERCIAL_PRECALL_STEPS,
+    variations: CP_VARIATIONS,
+  },
+};
+
+const variationKey = (experienceKey, regionCode, step) => `${experienceKey}::${regionCode}::${step}`;
+const parseVariationKey = (key) => {
+  const [experienceKey, regionCode, stepRaw] = key.split("::");
+  return { experienceKey, regionCode, stepId: Number(stepRaw) };
 };
 
 /* Primitives */
@@ -787,30 +868,430 @@ const Step7 = ({ region }) => {
   );
 };
 
+// STEP 201: NEXT BEST CUSTOMERS — AI-ranked HCP targeting list
+const StepNBC = ({ region }) => {
+  const isAPAC = region === "APAC";
+  const hcps = [
+    { initials: "RS", name: "Dr. Rebecca Shell",    specialty: "Rheumatology · UCSF Health",      tier: 1, rank: 1, score: 97, channels: ["F2F","Email"], consent: {F2F: true,  Email: true,  Phone: false}, lastVisit: "21d ago",  cadence: "Overdue",  pvFlag: false, serviceCall: false },
+    { initials: "KL", name: "Dr. Kevin Liu",         specialty: "Oncology · Stanford Medical",       tier: 1, rank: 2, score: 91, channels: ["Email","Phone"], consent: {F2F: true,  Email: true,  Phone: true }, lastVisit: "8d ago",   cadence: "On track", pvFlag: true,  serviceCall: false },
+    { initials: "MA", name: "Dr. Meera Agrawal",     specialty: "Immunology · UCSF Medical Ctr",    tier: 2, rank: 3, score: 85, channels: ["F2F","Virtual"], consent: {F2F: true,  Email: false, Phone: false}, lastVisit: "14d ago",  cadence: "On track", pvFlag: false, serviceCall: true  },
+    { initials: "TR", name: "Dr. Thomas Reyes",      specialty: "Rheumatology · Kaiser Permanente", tier: 2, rank: 4, score: 78, channels: ["F2F"], consent: {F2F: true,  Email: false, Phone: false}, lastVisit: "32d ago",  cadence: "Overdue",  pvFlag: false, serviceCall: false },
+    { initials: "SP", name: "Dr. Sunita Patel",      specialty: "Oncology · CPMC",                 tier: 3, rank: 5, score: 64, channels: ["Email","Phone"], consent: {F2F: false, Email: true,  Phone: true }, lastVisit: "5d ago",   cadence: "On track", pvFlag: false, serviceCall: false },
+  ];
+  const channelColors = { F2F: T.success, Email: T.brand, Phone: T.warning, Virtual: "#7f5af0" };
+  return (
+    <>
+      <ContentCard padding={0}>
+        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${T.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>Next Best Customers</div>
+            <div style={{ fontSize: 11, color: T.textWeak, marginTop: 2 }}>AI-ranked · Territory: TM-SPC-SF North 20D02T11 · 5 of 38 shown</div>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <Pill tone="brand" icon={Sparkles}>Agentforce ranked</Pill>
+            <Btn variant="neutral" icon={Filter}>Segment</Btn>
+          </div>
+        </div>
+        <div style={{ padding: "8px 18px", borderBottom: `1px solid ${T.borderLight}`, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {["All Tiers","Tier 1","Tier 2","Overdue Only","Consent: Email"].map((f,i) => (
+            <button key={f} style={{ padding: "4px 12px", borderRadius: 12, border: `1px solid ${i === 0 ? T.brand : T.border}`, background: i === 0 ? T.brandSoft : "#fff", color: i === 0 ? T.brandDark : T.textMute, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{f}</button>
+          ))}
+        </div>
+        <div style={{ display: "grid", gap: 0 }}>
+          {hcps.map((hcp, idx) => (
+            <div key={hcp.initials} style={{ display: "grid", gridTemplateColumns: "44px 1fr auto", gap: 12, padding: "12px 18px", borderBottom: idx < hcps.length - 1 ? `1px solid ${T.borderLight}` : "none", cursor: "pointer" }}>
+              <div style={{ position: "relative" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 20, background: T.brandSoft, display: "grid", placeItems: "center", fontWeight: 700, color: T.brand, fontSize: 13 }}>{hcp.initials}</div>
+                <span style={{ position: "absolute", top: -4, right: -4, width: 16, height: 16, borderRadius: 8, background: hcp.rank <= 2 ? T.brand : T.border, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", border: "1.5px solid #fff" }}>#{hcp.rank}</span>
+              </div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>{hcp.name}</span>
+                  <Pill tone="info">Tier {hcp.tier}</Pill>
+                  <Pill tone={hcp.cadence === "Overdue" ? "warning" : "success"}>{hcp.cadence}</Pill>
+                  {isAPAC && hcp.pvFlag && <Pill tone="error">PV Visit Required</Pill>}
+                  {isAPAC && hcp.serviceCall && <Pill tone="neutral">Service Call</Pill>}
+                </div>
+                <div style={{ fontSize: 11, color: T.textMute, marginBottom: 4 }}>{hcp.specialty} · Last visit: {hcp.lastVisit}</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {["F2F","Email","Phone","Virtual"].map(ch => {
+                    const preferred = hcp.channels.includes(ch);
+                    const consented = isAPAC ? hcp.consent[ch] : preferred;
+                    const blocked   = isAPAC && !hcp.consent[ch];
+                    return (
+                      <span key={ch} style={{
+                        padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 600,
+                        background: blocked ? "#ecebea" : preferred ? (channelColors[ch] + "22") : "transparent",
+                        color: blocked ? T.textWeak : preferred ? channelColors[ch] : T.textWeak,
+                        border: `1px solid ${blocked ? T.borderLight : preferred ? channelColors[ch] : T.borderLight}`,
+                        textDecoration: blocked ? "line-through" : "none",
+                      }}>{ch}{blocked ? " 🔒" : preferred ? " ★" : ""}</span>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: hcp.score >= 90 ? T.success : hcp.score >= 75 ? T.warning : T.textWeak }}>{hcp.score}<span style={{ fontSize: 10, fontWeight: 500, color: T.textWeak }}>/100</span></div>
+                {isAPAC && (
+                  <div style={{ fontSize: 10, color: T.brand, fontWeight: 600 }}>Best: {["Mon 9am","Tue 2pm","Wed 11am","Thu 10am","Fri 3pm"][idx]}</div>
+                )}
+                <div style={{ display: "flex", gap: 4 }}>
+                  <Btn variant="outline" style={{ height: 28, padding: "0 10px", fontSize: 11 }}>Profile</Btn>
+                  <Btn variant="primary" style={{ height: 28, padding: "0 10px", fontSize: 11 }}>Plan Visit</Btn>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {isAPAC && (
+          <div style={{ padding: "10px 18px", background: T.brandSoft, borderTop: `1px solid ${T.borderLight}`, display: "flex", gap: 8, alignItems: "center", fontSize: 11, color: T.brandDark }}>
+            <Sparkles size={13}/>
+            <span><b>APAC AI scheduling:</b> Visit order optimised by geographic cluster. Consent locks shown on channel chips. 🔒 = no valid consent on record.</span>
+          </div>
+        )}
+      </ContentCard>
+    </>
+  );
+};
+
+// STEP 202: CALENDAR & PLANNER — week view with Outlook sync
+const StepCalendar = ({ region }) => {
+  const isAPAC = region === "APAC";
+  const days = ["Mon 28","Tue 29","Wed 30","Thu 1","Fri 2"];
+  const visits = [
+    { day: 0, time: "09:30", hcp: "Dr. R. Shell",  type: "F2F",     tier: 1, duration: "45m", color: T.brand    },
+    { day: 0, time: "14:00", hcp: "Internal · Team sync", type: "Meeting", tier: null, duration: "60m", color: T.textMute },
+    { day: 1, time: "10:00", hcp: "Dr. K. Liu",    type: "Email followup", tier: 1, duration: "—", color: T.success  },
+    { day: 2, time: "09:00", hcp: "Dr. M. Agrawal",type: "F2F",     tier: 2, duration: "30m", color: T.brand    },
+    { day: 2, time: "11:30", hcp: "Dr. T. Reyes",  type: "F2F",     tier: 2, duration: "30m", color: T.brand    },
+    { day: 3, time: "13:00", hcp: "Dr. S. Patel",  type: "Phone",   tier: 3, duration: "20m", color: T.warning  },
+    { day: 4, time: "10:00", hcp: "Open slot",     type: "",        tier: null, duration: "—", color: T.borderLight, empty: true },
+  ];
+  return (
+    <>
+      <ContentCard padding={0}>
+        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${T.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>Calendar · Week of Apr 28</div>
+            <div style={{ fontSize: 11, color: T.textWeak, marginTop: 2 }}>5 visits planned · 1 email follow-up · Outlook synced</div>
+          </div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <Pill tone="success" icon={CheckCircle2}>Outlook synced</Pill>
+            {isAPAC && <Pill tone="brand">RxVantage overlay</Pill>}
+            <Btn variant="neutral" icon={Plus}>Add visit</Btn>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 0 }}>
+          {days.map((d, di) => (
+            <div key={d} style={{ borderRight: di < 4 ? `1px solid ${T.borderLight}` : "none" }}>
+              <div style={{ padding: "8px 10px", background: T.surfaceAlt, borderBottom: `1px solid ${T.borderLight}`, fontSize: 11, fontWeight: 700, textAlign: "center", color: T.textMute }}>{d}</div>
+              <div style={{ padding: 6, minHeight: 260, display: "grid", gap: 6, alignContent: "start" }}>
+                {visits.filter(v => v.day === di).map((v, vi) => (
+                  <div key={vi} style={{ padding: "8px 10px", borderRadius: 6, background: v.empty ? T.surfaceAlt : (v.color + "18"), border: `1px solid ${v.empty ? T.borderLight : (v.color + "55")}`, cursor: v.empty ? "default" : "pointer" }}>
+                    <div style={{ fontSize: 10, color: v.color, fontWeight: 700 }}>{v.time}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, color: v.empty ? T.textWeak : T.text }}>{v.hcp}</div>
+                    {v.type && <div style={{ fontSize: 10, color: T.textMute, marginTop: 1 }}>{v.type}{v.tier ? ` · Tier ${v.tier}` : ""}{v.duration !== "—" ? ` · ${v.duration}` : ""}</div>}
+                    {v.empty && <div style={{ fontSize: 10, color: T.brand, marginTop: 4 }}>{isAPAC ? "+ Suggest APAC HCP (geo cluster)" : "+ Suggest HCP"}</div>}
+                    {isAPAC && !v.empty && v.type === "F2F" && (
+                      <div style={{ marginTop: 4, fontSize: 9, color: T.brand, fontWeight: 600 }}>📍 RxVantage: Available {["09:00–11:00","10:30–12:00","09:00–12:00","14:00–15:30","10:00–11:30"][vi % 5]}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        {isAPAC && (
+          <div style={{ padding: "10px 18px", background: T.brandSoft, borderTop: `1px solid ${T.borderLight}`, display: "flex", gap: 8, alignItems: "center", fontSize: 11, color: T.brandDark }}>
+            <Sparkles size={13}/>
+            <span><b>APAC scheduling:</b> RxVantage availability overlaid on F2F visits. ML contact windows applied. Geographic clustering active — Mon/Wed visits grouped by North SF district.</span>
+          </div>
+        )}
+      </ContentCard>
+      <ContentCard padding={0}>
+        <div style={{ padding: "12px 18px", borderBottom: `1px solid ${T.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>AI Follow-Up Reminders</div>
+          <Pill tone="brand" icon={Sparkles}>3 due this week</Pill>
+        </div>
+        <div style={{ padding: 14, display: "grid", gap: 8 }}>
+          {[
+            { hcp: "Dr. K. Liu",   action: "Send approved efficacy email following Fri visit", due: "Today",  tone: "warning" },
+            { hcp: "Dr. T. Reyes", action: "Schedule next Tier 2 visit — cadence 14d exceeded",  due: "Tomorrow", tone: "warning" },
+            { hcp: "Dr. R. Shell", action: "Submit visit documentation for Apr 28 visit",         due: "Thu EOD",  tone: "info" },
+          ].map((r, i) => (
+            <div key={i} style={{ display: "flex", gap: 12, alignItems: "center", padding: 10, border: `1px solid ${T.borderLight}`, borderRadius: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 16, background: T.brandSoft, display: "grid", placeItems: "center" }}>
+                <Bell size={14} color={T.brand}/>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>{r.hcp}</div>
+                <div style={{ fontSize: 11, color: T.textMute }}>{r.action}</div>
+              </div>
+              <Pill tone={r.tone}>Due {r.due}</Pill>
+              <Btn variant="primary" style={{ height: 28, padding: "0 10px", fontSize: 11 }}>Act</Btn>
+            </div>
+          ))}
+        </div>
+      </ContentCard>
+    </>
+  );
+};
+
+// STEP 203: VISIT SUBMISSION QUEUE — pending documentation
+const StepVisitSubmission = () => (
+  <>
+    <ContentCard padding={0}>
+      <div style={{ padding: "14px 18px", borderBottom: `1px solid ${T.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Visit Submission Queue</div>
+          <div style={{ fontSize: 11, color: T.textWeak, marginTop: 2 }}>3 visits pending documentation · 1 overdue</div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <Pill tone="warning">1 overdue</Pill>
+          <Pill tone="brand" icon={Sparkles}>AI-prioritised</Pill>
+        </div>
+      </div>
+      <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ background: T.surfaceAlt }}>
+            {["HCP", "Visit Date", "Channel", "Status", "AI Flag", "Actions"].map(h => (
+              <th key={h} style={{ textAlign: "left", padding: "10px 14px", fontSize: 11, fontWeight: 600, color: T.textMute, borderBottom: `1px solid ${T.border}` }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            { hcp: "Dr. Rebecca Shell",   date: "Apr 28", channel: "F2F",  status: "Overdue",  flag: "🔴 Deadline: today EOD",    flagTone: "error"   },
+            { hcp: "Dr. Thomas Reyes",    date: "Apr 29", channel: "F2F",  status: "Pending",  flag: "🟡 Submit by Apr 30",       flagTone: "warning" },
+            { hcp: "Dr. Meera Agrawal",   date: "Apr 30", channel: "Virtual", status: "Draft",  flag: "🟢 3 days remaining",      flagTone: "success" },
+          ].map((r, i) => (
+            <tr key={i} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+              <td style={{ padding: "12px 14px", fontWeight: 600 }}>{r.hcp}</td>
+              <td style={{ padding: "12px 14px", color: T.textMute }}>{r.date}</td>
+              <td style={{ padding: "12px 14px" }}><Pill>{r.channel}</Pill></td>
+              <td style={{ padding: "12px 14px" }}><Pill tone={r.status === "Overdue" ? "error" : r.status === "Pending" ? "warning" : "info"}>{r.status}</Pill></td>
+              <td style={{ padding: "12px 14px", fontSize: 11, color: T.textMute }}>{r.flag}</td>
+              <td style={{ padding: "12px 14px" }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <Btn variant="primary" style={{ height: 28, padding: "0 10px", fontSize: 11 }} icon={Send}>Submit</Btn>
+                  <Btn variant="neutral" style={{ height: 28, padding: "0 10px", fontSize: 11 }}>Edit</Btn>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </ContentCard>
+    <ContentCard>
+      <div style={{ padding: "12px 18px", borderBottom: `1px solid ${T.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>AI Submission Assistant</div>
+        <Pill tone="brand" icon={Sparkles}>STORY-00021</Pill>
+      </div>
+      <div style={{ padding: 14, display: "grid", gap: 10 }}>
+        <div style={{ padding: 12, background: T.errorBg, borderRadius: 8, display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <AlertTriangle size={14} color={T.error}/>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.error, marginBottom: 2 }}>Dr. Shell — Apr 28 visit documentation overdue today</div>
+            <div style={{ fontSize: 11, color: T.textMute }}>AI recommends submitting this first. Pre-filled from visit data. Click Submit to review and confirm.</div>
+          </div>
+          <Btn variant="danger" style={{ flexShrink: 0 }} icon={Send}>Submit now</Btn>
+        </div>
+        <div style={{ padding: 12, background: T.brandSoft, borderRadius: 8, display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <Sparkles size={14} color={T.brand}/>
+          <div style={{ fontSize: 11, color: T.brandDark, lineHeight: 1.5 }}>
+            <b>AI insight:</b> Dr. Reyes Apr 29 visit can be cloned from your Apr 15 visit — same HCP, objectives, and location. Use Clone Visit to save time.
+          </div>
+          <Btn variant="outline" style={{ flexShrink: 0 }}>Clone Visit</Btn>
+        </div>
+      </div>
+    </ContentCard>
+  </>
+);
+
 /* ROOT */
 export default function EDetailingPrototype() {
+  const [experienceKey, setExperienceKey] = useState("detailing");
   const [region, setRegion] = useState("CORE");
   const [stepId, setStepId] = useState(2);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [variationSelections, setVariationSelections] = useState({});
+  const [noteDraft, setNoteDraft] = useState("");
+  const [exportMessage, setExportMessage] = useState("");
 
-  const step      = STEPS.find(s => s.id === stepId);
-  const variation = VARIATIONS[stepId]?.[region];
+  const experience = EXPERIENCE_CONFIG[experienceKey];
+  const activeSteps = experience.steps;
+  const activeVariations = experience.variations;
+  const activeStepIds = activeSteps.map(item => item.id);
+
+  const step = activeSteps.find(s => s.id === stepId) || activeSteps[0];
+  const variation = activeVariations[step.id]?.[region];
+  const activeVariationKey = variation ? variationKey(experienceKey, region, step.id) : null;
+  const activeSelection = activeVariationKey ? (variationSelections[activeVariationKey] || {}) : null;
+
+  const setActiveVariationSelection = (patch) => {
+    if (!activeVariationKey) return;
+    setVariationSelections(prev => ({
+      ...prev,
+      [activeVariationKey]: {
+        ...(prev[activeVariationKey] || {}),
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  };
+
+  const addTaggedNote = (type) => {
+    if (!activeVariationKey || !noteDraft.trim()) return;
+    const nextNote = {
+      type,
+      text: noteDraft.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    setVariationSelections(prev => {
+      const current = prev[activeVariationKey] || {};
+      const currentNotes = current.notes || [];
+      return {
+        ...prev,
+        [activeVariationKey]: {
+          ...current,
+          notes: [...currentNotes, nextNote],
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    });
+    setNoteDraft("");
+  };
+
+  const exportCurrentPIToPdf = () => {
+    const selectedItems = Object.entries(variationSelections)
+      .filter(([key, value]) => key.startsWith(`${experienceKey}::`) && value.piBucket === "current")
+      .map(([key, value]) => {
+        const { regionCode, stepId: selectedStepId } = parseVariationKey(key);
+        const selectedStep = activeSteps.find(s => s.id === selectedStepId);
+        const selectedVariation = activeVariations[selectedStepId]?.[regionCode];
+        const selectedRegion = REGIONS[regionCode];
+        if (!selectedStep || !selectedVariation || !selectedRegion) return null;
+        return {
+          step: selectedStep,
+          variation: selectedVariation,
+          region: selectedRegion,
+          selection: value,
+        };
+      })
+      .filter(Boolean);
+
+    if (!selectedItems.length) {
+      setExportMessage("No variations are moved to Current PI yet.");
+      return;
+    }
+
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    let y = 44;
+
+    doc.setFontSize(16);
+    doc.text("PI Planner - Current PI Regional Variations", 40, y);
+    y += 22;
+
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 40, y);
+    y += 18;
+
+    selectedItems.forEach((item, index) => {
+      if (y > 760) {
+        doc.addPage();
+        y = 44;
+      }
+
+      doc.setFontSize(12);
+      doc.text(`${index + 1}. ${item.step.id}. ${item.step.title} (${item.region.label})`, 40, y);
+      y += 16;
+
+      doc.setFontSize(10);
+      doc.text(`Surface: ${item.step.surface}`, 52, y);
+      y += 14;
+      doc.text(`Variation: ${item.variation.tag}`, 52, y);
+      y += 14;
+      doc.text(`Decision: ${(item.selection.decision || "pending").toUpperCase()}`, 52, y);
+      y += 14;
+      doc.text(`PI Bucket: ${(item.selection.piBucket || "unassigned").toUpperCase()}`, 52, y);
+      y += 14;
+
+      const notes = item.selection.notes || [];
+      if (notes.length) {
+        doc.text("Notes:", 52, y);
+        y += 14;
+        notes.forEach(note => {
+          const lines = doc.splitTextToSize(`- [${note.type.toUpperCase()}] ${note.text}`, 470);
+          doc.text(lines, 64, y);
+          y += (lines.length * 12) + 2;
+        });
+      }
+
+      y += 10;
+    });
+
+    doc.save(`pi-planner-current-pi-${Date.now()}.pdf`);
+    setExportMessage(`Exported ${selectedItems.length} variation(s) to PDF.`);
+  };
+
+  const activeRegionVariations = useMemo(
+    () => activeSteps
+      .map(s => {
+        const stepVariation = activeVariations[s.id]?.[region];
+        if (!stepVariation) return null;
+        return {
+          step: s,
+          variation: stepVariation,
+          selection: variationSelections[variationKey(experienceKey, region, s.id)] || {},
+        };
+      })
+      .filter(Boolean),
+    [activeSteps, activeVariations, experienceKey, region, variationSelections]
+  );
+
+  const activeRegionAcceptedCount = useMemo(
+    () => Object.entries(variationSelections)
+      .filter(([key, value]) => key.startsWith(`${experienceKey}::${region}::`) && value.decision === "approved")
+      .length,
+    [experienceKey, region, variationSelections]
+  );
+
+  const activeRegionCurrentPiCount = useMemo(
+    () => Object.entries(variationSelections)
+      .filter(([key, value]) => key.startsWith(`${experienceKey}::${region}::`) && value.piBucket === "current")
+      .length,
+    [experienceKey, region, variationSelections]
+  );
+
+  const activePhaseVariationCount = useMemo(
+    () => activeRegionVariations.filter(item => item.step.phase === step.phase).length,
+    [activeRegionVariations, step.phase]
+  );
 
   // Map step → which app tab is highlighted
   const tabForStep = {
     1: "Home", 2: "Accounts", 3: "IntelligentContent",
-    4: "Visits", 5: "Visits", 6: "Visits", 7: "Accounts"
-  }[stepId];
+    4: "Visits", 5: "Visits", 6: "Visits", 7: "Accounts",
+    201: "Home", 202: "Calendar", 203: "Visits",
+  }[step.id];
 
   // Auto-toggle notification panel for Step 1
-  const showNotifPanel = stepId === 1 || notificationOpen;
+  const showNotifPanel = step.id === 1 || notificationOpen;
 
   const stepScreen = useMemo(() => {
     const props = { region };
-    return { 1: <Step1 {...props}/>, 2: <Step2 {...props}/>, 3: <Step3 {...props}/>,
-             4: <Step4 {...props}/>, 5: <Step5 {...props}/>, 6: <Step6 {...props}/>,
-             7: <Step7 {...props}/> }[stepId];
-  }, [stepId, region]);
+    return {
+      1: <Step1 {...props}/>, 2: <Step2 {...props}/>, 3: <Step3 {...props}/>,
+      4: <Step4 {...props}/>, 5: <Step5 {...props}/>, 6: <Step6 {...props}/>,
+      7: <Step7 {...props}/>,
+      201: <StepNBC {...props}/>, 202: <StepCalendar {...props}/>, 203: <StepVisitSubmission {...props}/>,
+    }[step.id];
+  }, [step.id, region]);
+
+  const currentStepIndex = activeStepIds.indexOf(step.id);
+  const previousStepId = currentStepIndex > 0 ? activeStepIds[currentStepIndex - 1] : null;
+  const nextStepId = currentStepIndex >= 0 && currentStepIndex < activeStepIds.length - 1 ? activeStepIds[currentStepIndex + 1] : null;
 
   return (
     <div style={{
@@ -824,17 +1305,35 @@ export default function EDetailingPrototype() {
       <aside style={{ background: "#fff", borderRadius: 12, alignSelf: "start", position: "sticky", top: 16, overflow: "hidden" }}>
         <div style={{ padding: "14px 14px 10px", borderBottom: `1px solid ${T.borderLight}`, background: T.surfaceAlt }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", letterSpacing: 0.5 }}>Prototype</div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>e-Detailing on iPad</div>
-          <div style={{ fontSize: 10, color: T.textWeak, marginTop: 4 }}>Each step rendered in its native LSC surface</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{experience.title}</div>
+          <div style={{ fontSize: 10, color: T.textWeak, marginTop: 4 }}>{experience.subtitle}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
+            {Object.entries(EXPERIENCE_CONFIG).map(([key, config]) => (
+              <Btn
+                key={key}
+                variant={experienceKey === key ? "primary" : "outline"}
+                full
+                onClick={() => {
+                  setExperienceKey(key);
+                  setStepId(config.defaultStepId);
+                  setNoteDraft("");
+                  setExportMessage("");
+                }}
+                style={{ height: 32, borderRadius: 16, fontSize: 11, padding: "0 10px" }}
+              >
+                {config.label}
+              </Btn>
+            ))}
+          </div>
         </div>
         <div style={{ padding: 8 }}>
-          {["Before Visit", "During Visit", "After Visit"].map(phase => (
+          {Array.from(new Set(activeSteps.map(item => item.phase))).map(phase => (
             <div key={phase}>
               <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", letterSpacing: 0.6, padding: "10px 8px 4px" }}>{phase}</div>
-              {STEPS.filter(s => s.phase === phase).map(s => {
+              {activeSteps.filter(s => s.phase === phase).map(s => {
                 const Icon = s.icon;
-                const active = s.id === stepId;
-                const hasVariation = !!VARIATIONS[s.id]?.[region];
+                const active = s.id === step.id;
+                const hasVariation = !!activeVariations[s.id]?.[region];
                 return (
                   <button key={s.id} onClick={() => setStepId(s.id)} style={{
                     width: "100%", padding: "8px 10px", border: "none", textAlign: "left", cursor: "pointer",
@@ -876,6 +1375,7 @@ export default function EDetailingPrototype() {
             ))}
           </div>
           <div style={{ flex: 1 }}/>
+          <Pill tone="info">{experience.label}</Pill>
           {variation && <Pill tone="warning" icon={AlertTriangle}>Regional override active</Pill>}
           {!variation && region !== "CORE" && <Pill tone="success" icon={CheckCircle2}>Matches Common Core</Pill>}
         </div>
@@ -901,27 +1401,27 @@ export default function EDetailingPrototype() {
           borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center",
           border: "1px solid rgba(255,255,255,0.1)",
         }}>
-          <button onClick={() => setStepId(Math.max(1, stepId-1))} disabled={stepId===1} style={{
-            background: "transparent", color: stepId===1 ? "rgba(255,255,255,0.3)" : "#fff",
+          <button onClick={() => previousStepId && setStepId(previousStepId)} disabled={!previousStepId} style={{
+            background: "transparent", color: !previousStepId ? "rgba(255,255,255,0.3)" : "#fff",
             border: "1px solid rgba(255,255,255,0.2)", padding: "8px 16px", borderRadius: 999,
-            fontSize: 12, cursor: stepId===1 ? "not-allowed" : "pointer", fontFamily: "inherit",
+            fontSize: 12, cursor: !previousStepId ? "not-allowed" : "pointer", fontFamily: "inherit",
             display: "inline-flex", alignItems: "center", gap: 6,
           }}><ChevronLeft size={14}/>Previous</button>
           <div style={{ display: "flex", gap: 6 }}>
-            {STEPS.map(s => (
+            {activeSteps.map(s => (
               <div key={s.id} onClick={() => setStepId(s.id)} style={{
-                width: s.id === stepId ? 28 : 8, height: 8, borderRadius: 4,
-                background: s.id === stepId ? T.brand : s.id < stepId ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)",
+                width: s.id === step.id ? 28 : 8, height: 8, borderRadius: 4,
+                background: s.id === step.id ? T.brand : activeStepIds.indexOf(s.id) < currentStepIndex ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)",
                 cursor: "pointer", transition: "width 200ms",
               }}/>
             ))}
           </div>
-          <button onClick={() => setStepId(Math.min(7, stepId+1))} disabled={stepId===7} style={{
-            background: T.brand, color: stepId===7 ? "rgba(255,255,255,0.5)" : "#fff",
+          <button onClick={() => nextStepId && setStepId(nextStepId)} disabled={!nextStepId} style={{
+            background: T.brand, color: !nextStepId ? "rgba(255,255,255,0.5)" : "#fff",
             border: "none", padding: "8px 16px", borderRadius: 999,
-            fontSize: 12, cursor: stepId===7 ? "not-allowed" : "pointer", fontFamily: "inherit",
+            fontSize: 12, cursor: !nextStepId ? "not-allowed" : "pointer", fontFamily: "inherit",
             display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600,
-            opacity: stepId===7 ? 0.5 : 1,
+            opacity: !nextStepId ? 0.5 : 1,
           }}>Next step<ArrowRight size={14}/></button>
         </div>
       </main>
@@ -933,7 +1433,7 @@ export default function EDetailingPrototype() {
             <div style={{ fontSize: 10, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", letterSpacing: 0.5 }}>Compare</div>
             <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>Variation Inspector</div>
           </div>
-          <Pill tone="info">{Object.keys(VARIATIONS[stepId] || {}).length} variations</Pill>
+          <Pill tone={variation ? "warning" : "success"}>{variation ? "Override on this step" : "No override on this step"}</Pill>
         </div>
         <div style={{ padding: 14 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", marginBottom: 6, letterSpacing: 0.5 }}>Native LSC Surface</div>
@@ -946,6 +1446,12 @@ export default function EDetailingPrototype() {
             <span style={{ fontWeight: 700, fontSize: 13 }}>{REGIONS[region].label}</span>
           </div>
           <div style={{ fontSize: 11, color: T.textMute, lineHeight: 1.5, marginBottom: 12 }}>{REGIONS[region].note}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+            <Pill tone="info">{activeRegionVariations.length} regional variation(s)</Pill>
+            <Pill tone="warning">{activePhaseVariationCount} in {step.phase}</Pill>
+            <Pill tone="success">{activeRegionAcceptedCount} accepted</Pill>
+            <Pill tone="brand">{activeRegionCurrentPiCount} in Current PI</Pill>
+          </div>
           <hr style={{ border: 0, borderTop: `1px solid ${T.borderLight}`, margin: "8px 0 12px" }}/>
 
           {variation ? (
@@ -958,12 +1464,114 @@ export default function EDetailingPrototype() {
               </div>
               <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", marginBottom: 4, letterSpacing: 0.5 }}>UI Effect</div>
               <div style={{ fontSize: 11, color: T.text, lineHeight: 1.5 }}>{variation.effect}</div>
+
+              {variation.stories && variation.stories.length > 0 && (
+                <>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", margin: "12px 0 6px", letterSpacing: 0.5 }}>Stories in this Variation ({variation.stories.length})</div>
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {variation.stories.map(s => {
+                      const typeTones = { Config: "info", "Custom AI": "brand", Integration: "warning", "Custom Optimization": "warning" };
+                      return (
+                        <div key={s.id} style={{ padding: "8px 10px", border: `1px solid ${T.borderLight}`, borderRadius: 6, background: "#fff" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: T.textMute }}>{s.id}</span>
+                            <Pill tone={typeTones[s.type] || "neutral"}>{s.type}</Pill>
+                            <Pill tone={s.core === "Yes" ? "success" : "neutral"}>{s.core === "Yes" ? "Core" : "Optional"}</Pill>
+                          </div>
+                          <div style={{ fontSize: 11, color: T.text, lineHeight: 1.45 }}>{s.text}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              <hr style={{ border: 0, borderTop: `1px solid ${T.borderLight}`, margin: "12px 0 10px" }}/>
+              <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", marginBottom: 6, letterSpacing: 0.5 }}>PI Planning Decision</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
+                <Btn
+                  variant={activeSelection?.decision === "approved" ? "success" : "outline"}
+                  icon={CheckCircle2}
+                  full
+                  onClick={() => setActiveVariationSelection({ decision: "approved" })}
+                >
+                  Approve
+                </Btn>
+                <Btn
+                  variant={activeSelection?.decision === "rejected" ? "danger" : "neutral"}
+                  icon={X}
+                  full
+                  onClick={() => setActiveVariationSelection({ decision: "rejected" })}
+                >
+                  Reject
+                </Btn>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                <Btn
+                  variant={activeSelection?.piBucket === "current" ? "primary" : "outline"}
+                  icon={ArrowRight}
+                  full
+                  onClick={() => setActiveVariationSelection({ piBucket: "current" })}
+                >
+                  Move to Current PI
+                </Btn>
+                <Btn
+                  variant={activeSelection?.piBucket === "next" ? "primary" : "outline"}
+                  icon={ChevronRight}
+                  full
+                  onClick={() => setActiveVariationSelection({ piBucket: "next" })}
+                >
+                  Move to Next PI
+                </Btn>
+              </div>
+              <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {activeSelection?.decision && (
+                  <Pill tone={activeSelection.decision === "approved" ? "success" : "error"}>
+                    {activeSelection.decision === "approved" ? "Approved" : "Rejected"}
+                  </Pill>
+                )}
+                {activeSelection?.piBucket && (
+                  <Pill tone="info">{activeSelection.piBucket === "current" ? "Current PI" : "Next PI"}</Pill>
+                )}
+              </div>
+
+              <hr style={{ border: 0, borderTop: `1px solid ${T.borderLight}`, margin: "12px 0 10px" }}/>
+              <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", marginBottom: 6, letterSpacing: 0.5 }}>Clarifications & Follow-ups</div>
+              <textarea
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                placeholder="Add a question or comment for this regional variation..."
+                rows={2}
+                style={{
+                  width: "100%", padding: 8, border: `1px solid ${T.border}`,
+                  borderRadius: 6, fontSize: 11, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box",
+                }}
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
+                <Btn variant="outline" icon={MessageSquare} full onClick={() => addTaggedNote("question")}>Tag Question</Btn>
+                <Btn variant="neutral" icon={MessageSquare} full onClick={() => addTaggedNote("comment")}>Tag Comment</Btn>
+              </div>
+              {!!activeSelection?.notes?.length && (
+                <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+                  {activeSelection.notes.map((note, idx) => (
+                    <div key={`${note.createdAt}-${idx}`} style={{ padding: 8, border: `1px solid ${T.borderLight}`, borderRadius: 6, background: "#fff" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 3 }}>
+                        <Pill tone={note.type === "question" ? "warning" : "info"}>{note.type}</Pill>
+                        <span style={{ fontSize: 10, color: T.textWeak }}>{new Date(note.createdAt).toLocaleString()}</span>
+                      </div>
+                      <div style={{ fontSize: 11, lineHeight: 1.4 }}>{note.text}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           ) : (
             <>
               <Pill tone="success" icon={CheckCircle2}>{region === "CORE" ? "Common Core baseline" : "No override on this step"}</Pill>
               <div style={{ fontSize: 11, color: T.textMute, lineHeight: 1.5, marginTop: 10 }}>
-                {region === "CORE"
+                {experienceKey === "commercialPreCall"
+                  ? "Commercial Pre-Call is integrated into the same shell. The current screen intentionally reuses the existing pre-call mockup data and can be swapped to real planning data later."
+                  : region === "CORE"
                   ? "Toggle a region above to inspect deviations."
                   : `${REGIONS[region].label} adopts the Common Core experience as-is. Look for amber dots in the left nav for variations.`}
               </div>
@@ -973,21 +1581,33 @@ export default function EDetailingPrototype() {
           <hr style={{ border: 0, borderTop: `1px solid ${T.borderLight}`, margin: "14px 0 10px" }}/>
           <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", marginBottom: 6, letterSpacing: 0.5 }}>Variations across steps</div>
           <div style={{ display: "grid", gap: 3 }}>
-            {STEPS.map(s => {
-              const has = !!VARIATIONS[s.id]?.[region];
+            {activeSteps.map(s => {
+              const has = !!activeVariations[s.id]?.[region];
+              const stepSelection = variationSelections[variationKey(experienceKey, region, s.id)] || {};
               return (
                 <button key={s.id} onClick={() => setStepId(s.id)} style={{
                   display: "flex", alignItems: "center", gap: 6, padding: "5px 6px", border: "none",
-                  background: stepId === s.id ? T.brandSoft : "transparent", cursor: "pointer", borderRadius: 5,
+                  background: step.id === s.id ? T.brandSoft : "transparent", cursor: "pointer", borderRadius: 5,
                   textAlign: "left", fontFamily: "inherit",
                 }}>
                   <span style={{ width: 6, height: 6, borderRadius: 3, background: has ? T.warning : T.borderLight, flexShrink: 0 }}/>
                   <span style={{ fontSize: 10, color: has ? T.text : T.textWeak, flex: 1 }}>{s.id}. {s.title}</span>
                   {has && <Pill tone="warning">override</Pill>}
+                  {has && stepSelection.decision === "approved" && <Pill tone="success">approved</Pill>}
+                  {has && stepSelection.decision === "rejected" && <Pill tone="error">rejected</Pill>}
+                  {has && stepSelection.piBucket === "current" && <Pill tone="brand">current PI</Pill>}
+                  {has && stepSelection.piBucket === "next" && <Pill tone="info">next PI</Pill>}
                 </button>
               );
             })}
           </div>
+
+          <hr style={{ border: 0, borderTop: `1px solid ${T.borderLight}`, margin: "14px 0 10px" }}/>
+          <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", marginBottom: 6, letterSpacing: 0.5 }}>Export</div>
+          <Btn variant="primary" icon={Download} full onClick={exportCurrentPIToPdf}>Export Current PI Epics (PDF)</Btn>
+          {!!exportMessage && (
+            <div style={{ marginTop: 8, fontSize: 10, color: T.textMute, lineHeight: 1.4 }}>{exportMessage}</div>
+          )}
 
           <hr style={{ border: 0, borderTop: `1px solid ${T.borderLight}`, margin: "14px 0 10px" }}/>
           <div style={{ fontSize: 9, color: T.textWeak, lineHeight: 1.5 }}>
