@@ -1220,18 +1220,15 @@ export default function EDetailingPrototype() {
     setVariationSelections(prev => {
       const current = prev[activeVariationKey] || {};
       const currentStories = current.storySelections || {};
+      const existing = currentStories[storyId] || {};
+      const merged = { ...existing, ...patch, updatedAt: new Date().toISOString() };
+      // If decision was set to null (toggle off), remove the key
+      if (merged.decision === null) delete merged.decision;
       return {
         ...prev,
         [activeVariationKey]: {
           ...current,
-          storySelections: {
-            ...currentStories,
-            [storyId]: {
-              ...(currentStories[storyId] || {}),
-              ...patch,
-              updatedAt: new Date().toISOString(),
-            },
-          },
+          storySelections: { ...currentStories, [storyId]: merged },
           updatedAt: new Date().toISOString(),
         },
       };
@@ -1606,12 +1603,36 @@ export default function EDetailingPrototype() {
                   <div style={{ display: "grid", gap: 6 }}>
                     {variation.stories.map(s => {
                       const typeTones = { Config: "info", "Custom AI": "brand", Integration: "warning", "Custom Optimization": "warning" };
+                      const decision = activeSelection?.storySelections?.[s.id]?.decision;
                       return (
-                        <div key={s.id} style={{ padding: "8px 10px", border: `1px solid ${T.borderLight}`, borderRadius: 6, background: "#fff" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+                        <div key={s.id} style={{ padding: "8px 10px", border: `1px solid ${decision === "approved" ? T.success : decision === "rejected" ? T.error : T.borderLight}`, borderRadius: 6, background: decision === "approved" ? T.successBg : decision === "rejected" ? T.errorBg : "#fff" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, flexWrap: "wrap" }}>
                             <span style={{ fontSize: 10, fontWeight: 700, color: T.textMute }}>{s.id}</span>
                             <Pill tone={typeTones[s.type] || "neutral"}>{s.type}</Pill>
                             <Pill tone={s.core === "Yes" ? "success" : "neutral"}>{s.core === "Yes" ? "Core" : "Optional"}</Pill>
+                            <div style={{ flex: 1 }}/>
+                            <button
+                              onClick={() => setActiveStorySelection(s.id, { decision: decision === "approved" ? null : "approved" })}
+                              title="Approve"
+                              style={{
+                                width: 28, height: 28, borderRadius: 14, border: `1.5px solid ${decision === "approved" ? T.success : T.border}`,
+                                background: decision === "approved" ? T.success : "#fff",
+                                color: decision === "approved" ? "#fff" : T.textMute,
+                                cursor: "pointer", display: "grid", placeItems: "center",
+                              }}>
+                              <CheckCircle2 size={14}/>
+                            </button>
+                            <button
+                              onClick={() => setActiveStorySelection(s.id, { decision: decision === "rejected" ? null : "rejected" })}
+                              title="Reject"
+                              style={{
+                                width: 28, height: 28, borderRadius: 14, border: `1.5px solid ${decision === "rejected" ? T.error : T.border}`,
+                                background: decision === "rejected" ? T.error : "#fff",
+                                color: decision === "rejected" ? "#fff" : T.textMute,
+                                cursor: "pointer", display: "grid", placeItems: "center",
+                              }}>
+                              <X size={14}/>
+                            </button>
                           </div>
                           <div style={{ fontSize: 11, color: T.text, lineHeight: 1.45 }}>{s.text}</div>
                         </div>
@@ -1621,71 +1642,21 @@ export default function EDetailingPrototype() {
                 </>
               )}
 
-              <hr style={{ border: 0, borderTop: `1px solid ${T.borderLight}`, margin: "12px 0 10px" }}/>
-              <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", marginBottom: 6, letterSpacing: 0.5 }}>
-                {variation.stories?.length ? "User Story Decisions" : "PI Planning Decision"}
-              </div>
-              {variation.stories?.length ? (
-                <div style={{ display: "grid", gap: 6 }}>
-                  {variation.stories.map(s => {
-                    const decision = activeSelection?.storySelections?.[s.id]?.decision;
-                    return (
-                      <div key={`decision-${s.id}`} style={{ padding: 8, border: `1px solid ${T.borderLight}`, borderRadius: 6, background: T.surfaceAlt }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: T.textMute, marginBottom: 4 }}>{s.id}</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 6, alignItems: "center" }}>
-                          <Btn
-                            variant={decision === "approved" ? "success" : "outline"}
-                            icon={CheckCircle2}
-                            full
-                            onClick={() => setActiveStorySelection(s.id, { decision: "approved" })}
-                          >
-                            Approve
-                          </Btn>
-                          <Btn
-                            variant={decision === "rejected" ? "danger" : "neutral"}
-                            icon={X}
-                            full
-                            onClick={() => setActiveStorySelection(s.id, { decision: "rejected" })}
-                          >
-                            Reject
-                          </Btn>
-                          {decision && (
-                            <Pill tone={decision === "approved" ? "success" : "error"}>
-                              {decision === "approved" ? "Approved" : "Rejected"}
-                            </Pill>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
+              {!variation.stories?.length && (
                 <>
+                  <hr style={{ border: 0, borderTop: `1px solid ${T.borderLight}`, margin: "12px 0 10px" }}/>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: T.textWeak, textTransform: "uppercase", marginBottom: 6, letterSpacing: 0.5 }}>PI Planning Decision</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                    <Btn
-                      variant={activeSelection?.decision === "approved" ? "success" : "outline"}
-                      icon={CheckCircle2}
-                      full
-                      onClick={() => setActiveVariationSelection({ decision: "approved" })}
-                    >
-                      Approve
-                    </Btn>
-                    <Btn
-                      variant={activeSelection?.decision === "rejected" ? "danger" : "neutral"}
-                      icon={X}
-                      full
-                      onClick={() => setActiveVariationSelection({ decision: "rejected" })}
-                    >
-                      Reject
-                    </Btn>
+                    <Btn variant={activeSelection?.decision === "approved" ? "success" : "outline"} icon={CheckCircle2} full onClick={() => setActiveVariationSelection({ decision: "approved" })}>Approve</Btn>
+                    <Btn variant={activeSelection?.decision === "rejected" ? "danger" : "neutral"} icon={X} full onClick={() => setActiveVariationSelection({ decision: "rejected" })}>Reject</Btn>
                   </div>
-                  <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {activeSelection?.decision && (
+                  {activeSelection?.decision && (
+                    <div style={{ marginTop: 8 }}>
                       <Pill tone={activeSelection.decision === "approved" ? "success" : "error"}>
                         {activeSelection.decision === "approved" ? "Approved" : "Rejected"}
                       </Pill>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </>
               )}
 
